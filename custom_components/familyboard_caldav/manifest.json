@@ -1,0 +1,12 @@
+{
+  "domain": "familyboard_caldav",
+  "name": "FamilyBoard CalDAV",
+  "codeowners": ["@apiest"],
+  "config_flow": true,
+  "dependencies": ["todo"],
+  "documentation": "https://github.com/apiest/ha-familyboard-caldav",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/apiest/ha-familyboard-caldav/issues",
+  "requirements": ["caldav==2.1.0"],
+  "version": "0.1.0"
+}

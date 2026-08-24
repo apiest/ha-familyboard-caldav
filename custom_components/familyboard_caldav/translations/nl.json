@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "CalDAV-verbinding",
+        "description": "Maak verbinding met een CalDAV-server (bijv. Nextcloud) voor RFC-conforme takenbeheer met ondersteuning voor herhalende taken.",
+        "data": {
+          "url": "CalDAV-server-URL",
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord",
+          "name": "Verbindingsnaam (optioneel)",
+          "verify_ssl": "SSL-certificaat verifiëren",
+          "server_handles_rrule": "Server verwerkt herhalende taken",
+          "from_completion_tag": "Label voor 'herhalen vanaf voltooidatum'"
+        }
+      },
+      "reconfigure": {
+        "title": "CalDAV-verbinding bewerken",
+        "description": "Pas de CalDAV-serverinstellingen aan.",
+        "data": {
+          "url": "CalDAV-server-URL",
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord",
+          "name": "Verbindingsnaam (optioneel)",
+          "verify_ssl": "SSL-certificaat verifiëren",
+          "server_handles_rrule": "Server verwerkt herhalende taken",
+          "from_completion_tag": "Label voor 'herhalen vanaf voltooidatum'"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met de CalDAV-server. Controleer de URL en inloggegevens."
+    },
+    "abort": {
+      "already_configured": "Deze CalDAV-server is al geconfigureerd."
+    }
+  }
+}
