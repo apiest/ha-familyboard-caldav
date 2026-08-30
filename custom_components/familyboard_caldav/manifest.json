@@ -7,6 +7,7 @@
   "documentation": "https://github.com/apiest/ha-familyboard-caldav",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/apiest/ha-familyboard-caldav/issues",
-  "requirements": ["caldav==2.1.0"],
+  "loggers": ["caldav", "vobject"],
+  "requirements": ["caldav==2.1.0", "vobject==0.9.9"],
   "version": "0.1.0"
 }
