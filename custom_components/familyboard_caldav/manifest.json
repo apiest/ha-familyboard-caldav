@@ -1,13 +1,23 @@
 {
   "domain": "familyboard_caldav",
   "name": "FamilyBoard CalDAV",
-  "codeowners": ["@apiest"],
+  "codeowners": [
+    "@apiest"
+  ],
   "config_flow": true,
-  "dependencies": ["todo"],
+  "dependencies": [
+    "todo"
+  ],
   "documentation": "https://github.com/apiest/ha-familyboard-caldav",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/apiest/ha-familyboard-caldav/issues",
-  "loggers": ["caldav", "vobject"],
-  "requirements": ["caldav==2.1.0", "vobject==0.9.9"],
+  "loggers": [
+    "caldav",
+    "vobject"
+  ],
+  "requirements": [
+    "caldav==2.1.0",
+    "vobject==0.9.9"
+  ],
   "version": "0.1.1"
 }
