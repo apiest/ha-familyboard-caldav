@@ -241,8 +241,9 @@ def _advance_rrule(
         if hasattr(vtodo, "dtstart"):
             current_due = vtodo.dtstart.value
         else:
-            _LOGGER.warning("Recurring VTODO has no DUE or DTSTART, cannot advance")
-            return False
+            raise ValueError(
+                "Recurring VTODO has no DUE or DTSTART; task left unchanged"
+            )
 
     # Ensure we have a datetime for rruleset.after().
     # Keep timezone awareness consistent with what the rruleset produces:
@@ -257,6 +258,8 @@ def _advance_rrule(
         if current_due_dt.tzinfo is None:
             current_due_dt = current_due_dt.replace(tzinfo=datetime.UTC)
 
+    anchor = current_due_dt
+    next_due = None
     try:
         if from_completion:
             # Nextcloud stores the RRULE but never advances it, so we do what
@@ -266,7 +269,7 @@ def _advance_rrule(
                 completed_at or datetime.datetime.now(datetime.UTC),
                 date_only=date_only,
             )
-            next_due = rrulestr(rule_text, dtstart=anchor).after(anchor)
+            rruleset = rrulestr(rule_text, dtstart=anchor)
         elif rule_text != raw_rrule:
             # FROM=DUE — standard semantics, but dateutil chokes on the part,
             # so parse the sanitized rule anchored the way vobject would.
@@ -278,19 +281,18 @@ def _advance_rrule(
                     if date_only
                     else start_val
                 )
-            next_due = rrulestr(rule_text, dtstart=dtstart).after(current_due_dt)
+            rruleset = rrulestr(rule_text, dtstart=dtstart)
         else:
             rruleset = vtodo.getrruleset()
-            if rruleset is None:
-                return False
-            next_due = rruleset.after(current_due_dt)
-    except ValueError:
-        _LOGGER.warning(
-            "Cannot parse RRULE %r on VTODO %s, completing without advancing",
-            raw_rrule,
-            getattr(getattr(vtodo, "uid", None), "value", "?"),
-        )
-        return False
+        if rruleset is not None:
+            next_due = rruleset.after(anchor)
+    except (ValueError, TypeError) as err:
+        raise ValueError(
+            f"Cannot advance RRULE {raw_rrule!r}; task left unchanged"
+        ) from err
+
+    if rruleset is None:
+        raise ValueError("No recurrence set could be evaluated; task left unchanged")
 
     if next_due is None:
         # Recurrence exhausted
@@ -493,6 +495,9 @@ class CalDAVClientManager:
         CalDAV server implements that behaviour.
         """
         vobj = todo.vobject_instance
+
+        if getattr(getattr(vobj.vtodo, "status", None), "value", None) == "COMPLETED":
+            return _parse_vtodo(todo, calendar_name)
 
         client_side = not server_handles_rrule
         if not client_side and hasattr(vobj.vtodo, "rrule"):

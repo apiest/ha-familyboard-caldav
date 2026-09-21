@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 DOMAIN = "familyboard_caldav"
+EVENT_RECURRING_COMPLETED = f"{DOMAIN}_recurring_completed"
 
 UPDATE_INTERVAL = timedelta(minutes=5)
 

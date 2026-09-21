@@ -980,11 +980,43 @@ class TestAdvanceFromCompletion:
             # Next completion happens a week later than planned.
             completed += datetime.timedelta(days=7)
 
-    def test_unparseable_rrule_degrades(self) -> None:
-        """A malformed RRULE returns False instead of raising."""
+    def test_unparseable_rrule_raises(self) -> None:
+        """A malformed RRULE must not be treated as exhausted."""
         vobj = readOne(_from_completion_vtodo("FREQ=NONSENSE"))
 
-        assert _advance_rrule(vobj, COMPLETED_AT) is False
+        with pytest.raises(ValueError):
+            _advance_rrule(vobj, COMPLETED_AT)
+
+    @pytest.mark.parametrize(
+        "failure", [ValueError("invalid rule"), TypeError("mixed dates")]
+    )
+    def test_recurrence_failure_does_not_save(self, failure: Exception) -> None:
+        """Failed recurrence evaluation leaves the server task untouched."""
+        todo = _make_mock_todo(VTODO_DAILY_RRULE)
+        original = todo.vobject_instance.serialize()
+
+        with (
+            patch(
+                "vobject.icalendar.RecurringComponent.getrruleset", side_effect=failure
+            ),
+            pytest.raises(ValueError),
+        ):
+            CalDAVClientManager._complete_or_advance(todo, "Tasks")
+
+        todo.save.assert_not_called()
+        assert todo.vobject_instance.serialize() == original
+
+    def test_recurring_without_dates_does_not_save(self) -> None:
+        """A recurring task without an anchor cannot safely be completed."""
+        todo = _make_mock_todo(VTODO_DAILY_RRULE)
+        todo.vobject_instance.vtodo.contents.pop("due")
+        todo.vobject_instance.vtodo.contents.pop("dtstart")
+
+        with pytest.raises(ValueError):
+            CalDAVClientManager._complete_or_advance(todo, "Tasks")
+
+        todo.save.assert_not_called()
+        assert todo.vobject_instance.vtodo.status.value == "NEEDS-ACTION"
 
 
 class TestAdvanceFromCompletionTag:
@@ -1049,6 +1081,18 @@ class TestAdvanceFromCompletionTag:
 
 class TestCalDAVClientManager:
     """Tests for CalDAVClientManager with mocked CalDAV client."""
+
+    def test_already_completed_server_task_is_unchanged(self) -> None:
+        """Retrying a completed recurring task must not reopen it."""
+        todo = _make_mock_todo(VTODO_DAILY_RRULE)
+        todo.vobject_instance.vtodo.status.value = "COMPLETED"
+        original = todo.vobject_instance.serialize()
+
+        result = CalDAVClientManager._complete_or_advance(todo, "Tasks")
+
+        assert result.status == "COMPLETED"
+        assert todo.vobject_instance.serialize() == original
+        todo.save.assert_not_called()
 
     @pytest.fixture
     def config(self) -> dict:

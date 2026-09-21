@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-21
+
 ### Added
 - **Repeat from completion date.** Tagging a task with `from-completion` (the
   tag name is configurable per connection) makes it recur relative to when it
@@ -25,8 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raised `ValueError: unknown parameter 'FROM'` from `dateutil` and left the
   task unchanged. The part is now split off before parsing and preserved on
   save so Tasks.org keeps working.
-- An unparseable RRULE no longer aborts completion; it is logged and the
-  task is completed without advancing.
+- Invalid recurrence rules or missing recurrence anchors now reject completion
+  without saving, instead of marking the task completed without advancing.
+- Completion always uses the server-backed recurrence path, including cache
+  misses. Already-completed server tasks are left unchanged.
+- Successful client-side recurring completions emit an HA event so FamilyBoard
+  0.4.1 can credit an occurrence whose task UID remains unchanged.
 
 ## [0.1.0] - 2026-05-17
 

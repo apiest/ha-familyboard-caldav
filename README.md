@@ -113,8 +113,17 @@ When a recurring VTODO is completed:
 4. If no future occurrence exists (recurrence exhausted), the task is marked
    `COMPLETED` normally.
 
+If recurrence cannot be evaluated (for example, an invalid rule or missing
+`DUE` and `DTSTART`), completion fails with an error and the task is not saved.
+Calculation failures are not treated as recurrence exhaustion.
+
 When `server_handles_rrule` is enabled, the client skips advancement and simply
 marks the task `COMPLETED` — the server creates the next occurrence.
+
+**For Nextcloud with Tasks.org, leave `server_handles_rrule` off.** Tasks.org
+is another client, not the server: it advances tasks completed on the phone;
+this integration advances tasks completed through Home Assistant. Other clients
+then sync the saved result.
 
 ### Repeat from completion date
 
@@ -157,6 +166,10 @@ calendar-anchored and completion-anchored chores can live in the same list.
 
 Tagged tasks are **always** advanced client-side, even when
 `server_handles_rrule` is enabled — no CalDAV server implements this behaviour.
+
+The tag configures this integration, not Tasks.org's own repeat setting. Set
+"repeat from completion date" in Tasks.org as well, so phone and board
+completions use the same recurrence mode.
 
 #### Why a tag and not the Tasks.org setting?
 
@@ -213,6 +226,15 @@ data for every item in the calendar — fields not representable in HA's
 dtstart, completed) are preserved here.
 
 ## Configuration
+
+### Recurring completion event
+
+After successfully saving and refreshing a client-advanced recurring task, the
+integration fires `familyboard_caldav_recurring_completed` on the HA event bus
+with `entity_id` (the todo list) and `uid` (the task). FamilyBoard uses this to
+record completion credit even though the next occurrence keeps the same UID.
+Failed completions, ordinary edits, and sync-only refreshes do not fire it.
+It does not report completions made in Tasks.org or another external client.
 
 ### Config flow
 

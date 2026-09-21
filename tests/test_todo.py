@@ -6,9 +6,12 @@ import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.components.todo import TodoItem, TodoItemStatus
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 import pytest
 
 from custom_components.familyboard_caldav.caldav_client import VTodoItem
+from custom_components.familyboard_caldav.const import EVENT_RECURRING_COMPLETED
 from custom_components.familyboard_caldav.todo import FamilyBoardCalDAVTodo
 
 # ---------------------------------------------------------------------------
@@ -416,6 +419,37 @@ class TestUpdateTodoItem:
         coord.async_request_refresh.assert_not_awaited()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("recurring", [False, True])
+    async def test_completion_event_only_for_advanced_recurrence(
+        self, hass: HomeAssistant, recurring: bool
+    ) -> None:
+        """Only a successfully advanced recurrence emits a completion event."""
+        mgr = _make_manager()
+        mgr.async_complete_todo = AsyncMock(
+            return_value=_make_vtodo(
+                status="NEEDS-ACTION" if recurring else "COMPLETED",
+                rrule="FREQ=DAILY" if recurring else None,
+            )
+        )
+        coord = _make_coordinator(manager=mgr)
+        ent = _entity(coordinator=coord)
+        ent.hass = hass
+        ent.entity_id = "todo.tasks"
+        events = []
+        unsubscribe = hass.bus.async_listen(EVENT_RECURRING_COMPLETED, events.append)
+
+        await ent.async_update_todo_item(
+            TodoItem(uid="test-001", status=TodoItemStatus.COMPLETED)
+        )
+        await hass.async_block_till_done()
+        unsubscribe()
+
+        assert len(events) == int(recurring)
+        if recurring:
+            assert events[0].data == {"entity_id": "todo.tasks", "uid": "test-001"}
+        coord.async_request_refresh.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_complete_nonrecurring_delegates(self) -> None:
         """Completing a non-recurring task calls async_complete_todo."""
         mgr = _make_manager()
@@ -436,8 +470,8 @@ class TestUpdateTodoItem:
         coord.async_request_refresh.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_complete_already_completed_skips(self) -> None:
-        """Completing an already-completed task does a regular update."""
+    async def test_complete_already_completed_checks_server(self) -> None:
+        """Cached status must not bypass the server-backed completion path."""
         mgr = _make_manager()
         mgr.async_complete_todo = AsyncMock()
         mgr.async_update_todo = AsyncMock(return_value=_make_vtodo())
@@ -451,12 +485,12 @@ class TestUpdateTodoItem:
         item = TodoItem(uid="test-001", status=TodoItemStatus.COMPLETED)
         await ent.async_update_todo_item(item)
 
-        # Should NOT call async_complete_todo since it's already completed
-        mgr.async_complete_todo.assert_not_called()
+        mgr.async_complete_todo.assert_awaited_once_with("Tasks", "test-001")
+        mgr.async_update_todo.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_complete_unknown_uid_skips(self) -> None:
-        """Completing a UID not in _items does a regular update."""
+    async def test_complete_unknown_uid_checks_server(self) -> None:
+        """A cache miss still uses recurrence-aware completion."""
         mgr = _make_manager()
         mgr.async_complete_todo = AsyncMock()
         mgr.async_update_todo = AsyncMock(return_value=_make_vtodo())
@@ -467,7 +501,28 @@ class TestUpdateTodoItem:
         item = TodoItem(uid="unknown-uid", status=TodoItemStatus.COMPLETED)
         await ent.async_update_todo_item(item)
 
-        mgr.async_complete_todo.assert_not_called()
+        mgr.async_complete_todo.assert_awaited_once_with("Tasks", "unknown-uid")
+        mgr.async_update_todo.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("missing", [False, True])
+    async def test_completion_failure_is_reported(self, missing: bool) -> None:
+        """Missing tasks and invalid recurrence fail without a generic update."""
+        mgr = _make_manager()
+        mgr.async_complete_todo = AsyncMock(
+            return_value=None,
+            side_effect=None if missing else ValueError("Invalid recurrence"),
+        )
+        coord = _make_coordinator(manager=mgr)
+        ent = _entity(coordinator=coord)
+
+        with pytest.raises(HomeAssistantError):
+            await ent.async_update_todo_item(
+                TodoItem(uid="test-001", status=TodoItemStatus.COMPLETED)
+            )
+
+        mgr.async_update_todo.assert_not_called()
+        coord.async_request_refresh.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_reopen_completed(self) -> None:

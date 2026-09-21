@@ -18,12 +18,13 @@ from homeassistant.components.todo import (
     TodoListEntityFeature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .caldav_client import VTodoItem
-from .const import DOMAIN
+from .const import DOMAIN, EVENT_RECURRING_COMPLETED
 from .coordinator import CalDAVConfigEntry, CalDAVCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -208,14 +209,24 @@ class FamilyBoardCalDAVTodo(CoordinatorEntity[CalDAVCoordinator], TodoListEntity
 
         manager = self.coordinator.manager
 
-        # Check if this is a completion
         if item.status == TodoItemStatus.COMPLETED:
-            # Find the current item to check if it's actually changing
-            current = next((i for i in self._items if i.uid == item.uid), None)
-            if current and current.status != "COMPLETED":
-                await manager.async_complete_todo(self._calendar_name, item.uid)
-                await self._refresh()
-                return
+            try:
+                updated = await manager.async_complete_todo(
+                    self._calendar_name, item.uid
+                )
+            except ValueError as err:
+                raise HomeAssistantError(str(err)) from err
+            if updated is None:
+                raise HomeAssistantError(
+                    "Task could not be found; completion not saved"
+                )
+            await self._refresh()
+            if updated.status == "NEEDS-ACTION" and updated.rrule:
+                self.hass.bus.async_fire(
+                    EVENT_RECURRING_COMPLETED,
+                    {"entity_id": self.entity_id, "uid": item.uid},
+                )
+            return
 
         # Regular field update
         kwargs: dict[str, Any] = {}
